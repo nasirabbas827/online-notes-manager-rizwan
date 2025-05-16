@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="container mt-4">
+<h2 class="text-center mb-4"><i class="fas fa-user-circle"></i> Welcome, {{ username }}</h2>
+<!-- Reminder Notifications -->
+<div id="reminderNotifications">
+    {% for reminder in reminders %}
+    <div class="alert alert-info alert-dismissible fade show" role="alert" data-reminder-id="{{ reminder[0] }}">
+        <i class="fas fa-bell"></i>
+        <strong>{{ reminder[1] }}</strong> - Reminder at: {{ reminder[2] }} 
+        <span class="badge badge-secondary">{{ reminder[3].capitalize() }}</span>
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close" onclick="dismissReminder(this)">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+    {% endfor %}
+</div>
+
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{{ url_for('create_note_page') }}" class="btn btn-primary">
+        <i class="fas fa-plus-circle"></i> Create New Note
+    </a>
+    <button onclick="exportNotes()" class="btn btn-success">
+        <i class="fas fa-file-export"></i> Export Notes
+    </button>
+</div>
+
+<!-- Search Bar -->
+<div class="mb-4">
+    <input type="text" id="searchInput" class="form-control" placeholder="Search notes by title or content" oninput="searchNotes()">
+</div>
+
+<!-- Notes List -->
+<div class="row" id="notesList">
+    {% for note in notes %}
+    <div class="col-md-4 mb-4 note-card" data-title="{{ note[2] }}" data-content="{{ note[3] }}">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <strong><i class="fas fa-sticky-note"></i> {{ note[2] }}</strong>
+                {% if note[5] %}
+                    <span class="badge badge-warning"><i class="fas fa-thumbtack"></i> Pinned</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <p>{{ note[3][:100] }}...</p>
+                <small class="text-muted">
+                    Created: {{ note[4] }}<br>
+                    Updated: {{ note[7] }}
+                </small>
+            </div>
+            <div class="card-footer d-flex justify-content-end">
+                <a href="{{ url_for('edit_note', note_id=note[0]) }}" class="btn btn-sm btn-info mr-2">
+                    <i class="fas fa-edit"></i> Edit
+                </a>
+                <button onclick="deleteNote({{ note[0] }})" class="btn btn-sm btn-danger">
+                    <i class="fas fa-trash-alt"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+
+<script>
+// Search notes function
+function searchNotes() {
+    const query = document.getElementById('searchInput').value.trim();
+    fetch(`/notes/search?query=${encodeURIComponent(query)}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        const notesList = document.getElementById('notesList');
+        notesList.innerHTML = ''; // Clear current notes
+        data.notes.forEach(note => {
+            const noteCard = `
+                <div class="col-md-4 mb-3 note-card" data-title="${note[2]}" data-content="${note[3]}">
+                    <div class="card h-100">
+                        <div class="card-header bg-light">
+                            <strong>${note[2]}</strong>
+                            ${note[5] ? '<span class="badge bg-warning float-end">Pinned</span>' : ''}
+                        </div>
+                        <div class="card-body">
+                            <p>${note[3].substring(0, 100)}...</p>
+                            <small class="text-muted">${note[4]} | Updated: ${note[7]}</small>
+                        </div>
+                        <div class="card-footer text-end">
+                            <a href="/edit_note/${note[0]}" class="btn btn-sm btn-info">Edit</a>
+                            <button onclick="deleteNote(${note[0]})" class="btn btn-sm btn-danger">Delete</button>
+                        </div>
+                    </div>
+                </div>`;
+            notesList.innerHTML += noteCard;
+        });
+    });
+}
+
+// Delete note function
+function deleteNote(noteId) {
+    fetch(`/notes/delete/${noteId}`, {
+        method: 'POST'
+    }).then(res => res.json())
+      .then(data => location.reload());
+}
+
+// Export notes function
+function exportNotes() {
+    fetch('/notes/export', {
+        method: 'GET'
+    })
+    .then(res => res.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'notes_export.txt';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    });
+}
+
+function dismissReminder(button) {
+    const alertBox = button.closest('.alert');
+    alertBox.classList.remove('show');
+    alertBox.classList.add('hide');
+    setTimeout(() => alertBox.remove(), 300); // Remove from DOM after fade
+}
+</script>
+{% endblock %}

@@ -1,0 +1,230 @@
+{% extends 'base.html' %}
+{% block title %}Online Notes Manager{% endblock %}
+{% block content %}
+<!-- Jumbotron Section -->
+<div class="jumbotron text-center jumbotron-fluid" >
+    <div class="container">
+        <h1 style="font-weight: bold; color:white;">Welcome to Online Notes Manager</h1>
+        <p class="lead">Your Trusted Tool for Organizing and Managing Notes Seamlessly, Online or Offline.</p>
+        {% if 'username' in session %}
+            <p>Logged in as <strong>{{ session['username'] }}</strong> | 
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary" style="border-radius: 20px;">
+                    <i class="fas fa-tachometer-alt"></i> Go to Dashboard
+                </a>
+            </p>
+        {% else %}
+            <p>
+                <a href="{{ url_for('user_login') }}" class="btn btn-primary" style="border-radius: 20px;">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </a> 
+                or 
+                <a href="{{ url_for('register') }}" class="btn btn-secondary" style="border-radius: 20px;">
+                    <i class="fas fa-user-plus"></i> Register
+                </a> 
+                to sync your notes!
+            </p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Note Creation Section -->
+<div class="container mt-4">
+    {% if 'username' in session %}
+        <a href="{{ url_for('create_note_page') }}" class="btn btn-primary mb-4">
+            <i class="fas fa-plus"></i> Create New Note
+        </a>
+    {% else %}
+        <!-- Auto-save message -->
+        <div id="autosaveMessage" class="alert alert-success" style="display:none; position: fixed; top: 10px; right: 10px; z-index: 1050;">
+            Note auto-saved!
+        </div>
+
+        <!-- Create Note Form -->
+        <div class="card my-4">
+            <h1>Guest User Notes Creation</h1>
+            <div class="card-body">
+                <input type="hidden" id="noteId">
+                <div class="form-group mb-3">
+                    <label for="title"><i class="fas fa-heading"></i> Note Title</label>
+                    <input type="text" id="title" class="form-control" placeholder="Note Title">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="content"><i class="fas fa-align-left"></i> Note Content</label>
+                    <textarea id="content" class="form-control" placeholder="Note Content" rows="4"></textarea>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="category"><i class="fas fa-tags"></i> Category</label>
+                    <select id="category" class="form-control">
+                        <option>Work</option>
+                        <option>Personal</option>
+                        <option>Study</option>
+                        <option>Miscellaneous</option>
+                    </select>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="isPinned">
+                    <label class="form-check-label" for="isPinned">
+                        <i class="fas fa-thumbtack"></i> Pin this note
+                    </label>
+                </div>
+                <button class="btn btn-primary" onclick="saveNote(false)">
+                    <i class="fas fa-save"></i> Save
+                </button>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Notes List -->
+    <div class="row" id="notesList">
+        {% if 'username' in session %}
+            {% for note in notes %}
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header bg-light">
+                        <strong>{{ note[2] }}</strong>
+                        {% if note[5] %}
+                            <span class="badge bg-warning float-end"><i class="fas fa-thumbtack"></i> Pinned</span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <p>{{ note[3][:100] }}...</p>
+                        <small class="text-muted">{{ note[4] }} | Updated: {{ note[7] }}</small>
+                    </div>
+                    <div class="card-footer text-end">
+                        <a href="{{ url_for('edit_note', note_id=note[0]) }}" class="btn btn-sm btn-info">
+                            <i class="fas fa-edit"></i> Edit
+                        </a>
+                        <button onclick="deleteNote({{ note[0] }})" class="btn btn-sm btn-danger">
+                            <i class="fas fa-trash-alt"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <!-- Guest notes will be populated here by JavaScript -->
+        {% endif %}
+    </div>
+</div>
+
+<!-- Footer Section -->
+<footer class="footer mt-5" style="background-color: #004d4d; color: white; padding: 20px 0;">
+    <div class="container text-center">
+        <span style="font-size: 1rem; color:white;">
+            © 2025 Online Notes Manager. All rights reserved. | 
+            <a href="#" style="color: white;">Privacy Policy</a> | 
+            <a href="#" style="color: white;">Terms of Service</a>
+        </span>
+    </div>
+</footer>
+
+
+{% if 'username' not in session %}
+<script>
+// Load notes from local storage on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadGuestNotes();
+});
+
+// Autosave every 5 seconds
+let autoSaveInterval = setInterval(() => {
+    saveNote(true);
+}, 5000);
+
+function loadGuestNotes() {
+    const notes = JSON.parse(localStorage.getItem('guestNotes') || '[]');
+    const notesList = document.getElementById('notesList');
+    notesList.innerHTML = '';
+    notes.forEach(note => {
+        const noteCard = `
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header bg-light">
+                        <strong>${note.title}</strong>
+                        ${note.isPinned ? '<span class="badge bg-warning float-end">Pinned</span>' : ''}
+                    </div>
+                    <div class="card-body">
+                        <p>${note.content.substring(0, 100)}...</p>
+                        <small class="text-muted">${note.category} | Updated: ${new Date(note.updatedAt).toLocaleString()}</small>
+                    </div>
+                    <div class="card-footer text-end">
+                        <button onclick="editGuestNote('${note.id}')" class="btn btn-sm btn-info">Edit</button>
+                        <button onclick="deleteGuestNote('${note.id}')" class="btn btn-sm btn-danger">Delete</button>
+                    </div>
+                </div>
+            </div>`;
+        notesList.innerHTML += noteCard;
+    });
+}
+
+function saveNote(auto = false) {
+    const noteId = document.getElementById('noteId').value;
+    const title = document.getElementById('title').value.trim();
+    const content = document.getElementById('content').value.trim();
+    const category = document.getElementById('category').value;
+    const isPinned = document.getElementById('isPinned').checked;
+
+    if (!title && !content) return; // Skip empty autosaves
+
+    let notes = JSON.parse(localStorage.getItem('guestNotes') || '[]');
+    const note = { id: noteId || Date.now().toString(), title, content, category, isPinned, updatedAt: Date.now() };
+
+    if (noteId) {
+        // Update existing note
+        notes = notes.map(n => n.id === noteId ? note : n);
+    } else {
+        // Create new note
+        notes.push(note);
+    }
+
+    localStorage.setItem('guestNotes', JSON.stringify(notes));
+    document.getElementById('noteId').value = note.id;
+
+    if (!auto) {
+        // Clear form on manual save
+        document.getElementById('noteId').value = '';
+        document.getElementById('title').value = '';
+        document.getElementById('content').value = '';
+        document.getElementById('category').value = 'Work';
+        document.getElementById('isPinned').checked = false;
+        loadGuestNotes();
+    } else {
+        // Show autosave message
+        const msg = document.getElementById('autosaveMessage');
+        msg.style.display = 'block';
+        setTimeout(() => {
+            msg.style.display = 'none';
+        }, 2000);
+    }
+}
+
+function editGuestNote(noteId) {
+    const notes = JSON.parse(localStorage.getItem('guestNotes') || '[]');
+    const note = notes.find(n => n.id === noteId);
+    if (note) {
+        document.getElementById('noteId').value = note.id;
+        document.getElementById('title').value = note.title;
+        document.getElementById('content').value = note.content;
+        document.getElementById('category').value = note.category;
+        document.getElementById('isPinned').checked = note.isPinned;
+    }
+}
+
+function deleteGuestNote(noteId) {
+    let notes = JSON.parse(localStorage.getItem('guestNotes') || '[]');
+    notes = notes.filter(n => n.id !== noteId);
+    localStorage.setItem('guestNotes', JSON.stringify(notes));
+    loadGuestNotes();
+}
+</script>
+{% else %}
+<script>
+function deleteNote(noteId) {
+    fetch(`/notes/delete/${noteId}`, {
+        method: 'POST'
+    }).then(res => res.json())
+      .then(data => location.reload());
+}
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}Edit Reminder{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="card mx-auto" style="max-width: 500px;">
+        <div class="card-body">
+            <h2><i class="fas fa-edit"></i> Edit Reminder</h2>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="POST">
+                <div class="form-group">
+                    <label for="note_id"><i class="fas fa-sticky-note"></i> Select Note</label>
+                    <select id="note_id" name="note_id" class="form-control" required>
+                        {% for note in notes %}
+                            <option value="{{ note[0] }}" {% if note[0] == reminder[1] %}selected{% endif %}>{{ note[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reminder_date"><i class="fas fa-calendar-alt"></i> Reminder Date & Time</label>
+                    <input type="datetime-local" id="reminder_date" name="reminder_date" class="form-control" value="{{ reminder[2].strftime('%Y-%m-%dT%H:%M') }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="status"><i class="fas fa-tasks"></i> Status</label>
+                    <select id="status" name="status" class="form-control">
+                        <option value="pending" {% if reminder[3] == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="completed" {% if reminder[3] == 'completed' %}selected{% endif %}>Completed</option>
+                        <option value="snoozed" {% if reminder[3] == 'snoozed' %}selected{% endif %}>Snoozed</option>
+                        <option value="canceled" {% if reminder[3] == 'canceled' %}selected{% endif %}>Canceled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="snoozed_until"><i class="fas fa-clock"></i> Snoozed Until (optional)</label>
+                    <input type="datetime-local" id="snoozed_until" name="snoozed_until" class="form-control" {% if reminder[4] %}value="{{ reminder[4].strftime('%Y-%m-%dT%H:%M') }}"{% endif %}>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3">
+                    <i class="fas fa-save"></i> Update Reminder
+                </button>
+                <a href="{{ url_for('view_reminders') }}" class="btn btn-secondary mt-3">
+                    <i class="fas fa-times-circle"></i> Cancel
+                </a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

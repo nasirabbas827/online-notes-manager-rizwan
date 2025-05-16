@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Add Reminder{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="card mx-auto" style="max-width: 500px;">
+        <div class="card-body">
+            <h2><i class="fas fa-bell"></i> Add Reminder</h2>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="POST">
+                <div class="form-group">
+                    <label for="note_id"><i class="fas fa-sticky-note"></i> Select Note</label>
+                    <select id="note_id" name="note_id" class="form-control" required>
+                        {% for note in notes %}
+                            <option value="{{ note[0] }}">{{ note[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reminder_date"><i class="fas fa-calendar-alt"></i> Reminder Date & Time</label>
+                    <input type="datetime-local" id="reminder_date" name="reminder_date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="status"><i class="fas fa-tasks"></i> Status</label>
+                    <select id="status" name="status" class="form-control">
+                        <option value="pending">Pending</option>
+                        <option value="completed">Completed</option>
+                        <option value="snoozed">Snoozed</option>
+                        <option value="canceled">Canceled</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3">
+                    <i class="fas fa-plus-circle"></i> Add Reminder
+                </button>
+                <a href="{{ url_for('view_reminders') }}" class="btn btn-secondary mt-3">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
