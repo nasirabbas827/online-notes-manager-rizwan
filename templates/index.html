@@ -2,74 +2,128 @@
 {% block title %}Online Notes Manager{% endblock %}
 {% block content %}
 <!-- Jumbotron Section -->
-<div class="jumbotron text-center jumbotron-fluid" >
+<div class="jumbotron jumbotron-fluid text-center" style="background-image: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('https://images.pexels.com/photos/733857/pexels-photo-733857.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2'); background-size: cover; background-position: center; min-height: 600px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 0.75rem; margin-bottom: 3rem; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);">
     <div class="container">
-        <h1 style="font-weight: bold; color:white;">Welcome to Online Notes Manager</h1>
-        <p class="lead">Your Trusted Tool for Organizing and Managing Notes Seamlessly, Online or Offline.</p>
-        {% if 'username' in session %}
-            <p>Logged in as <strong>{{ session['username'] }}</strong> | 
-                <a href="{{ url_for('dashboard') }}" class="btn btn-primary" style="border-radius: 20px;">
-                    <i class="fas fa-tachometer-alt"></i> Go to Dashboard
+        <h1 class="display-3 fw-bold text-white" style="text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);">Welcome to Notes Manager</h1>
+        <p class="lead mt-3 text-white" style="font-size: 1.5rem;">Organize, manage, and access your notes effortlessly—anytime, anywhere.</p>
+        <div class="mt-4">
+            {% if 'username' in session %}
+                <span class="text-white fs-5">Welcome back, <strong>{{ session['username'] }}</strong>!</span>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg mt-3 px-5 py-3" style="border-radius: 50px;">
+                    <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
                 </a>
-            </p>
-        {% else %}
-            <p>
-                <a href="{{ url_for('user_login') }}" class="btn btn-primary" style="border-radius: 20px;">
-                    <i class="fas fa-sign-in-alt"></i> Login
-                </a> 
-                or 
-                <a href="{{ url_for('register') }}" class="btn btn-secondary" style="border-radius: 20px;">
-                    <i class="fas fa-user-plus"></i> Register
-                </a> 
-                to sync your notes!
-            </p>
-        {% endif %}
+            {% else %}
+                <a href="{{ url_for('user_login') }}" class="btn btn-primary btn-lg px-5 py-3 me-2" style="border-radius: 50px;">
+                    <i class="fas fa-sign-in-alt me-2"></i>Login
+                </a>
+                <a href="{{ url_for('register') }}" class="btn btn-outline-light btn-lg px-5 py-3" style="border-radius: 50px;">
+                    <i class="fas fa-user-plus me-2"></i>Register
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Flashed Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="container mb-5">
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<!-- Features Section -->
+<div class="container my-5">
+    <div class="text-center mb-5">
+        <h2 class="display-5 fw-bold"><i class="fas fa-star me-2"></i>Why Choose Notes Manager?</h2>
+        <p class="text-muted">Discover the features that make note-taking effortless and secure.</p>
+    </div>
+    <div class="row text-center">
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-0 shadow-lg" style="border-radius: 0.75rem;">
+                <div class="card-body p-4">
+                    <i class="fas fa-cloud fa-3x text-primary mb-3"></i>
+                    <h3 class="h5 fw-bold">Sync Across Devices</h3>
+                    <p class="text-muted">Access your notes seamlessly on any device with cloud synchronization.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-0 shadow-lg" style="border-radius: 0.75rem;">
+                <div class="card-body p-4">
+                    <i class="fas fa-lock fa-3x text-primary mb-3"></i>
+                    <h3 class="h5 fw-bold">Secure & Private</h3>
+                    <p class="text-muted">Your notes are encrypted and protected with top-notch security.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-0 shadow-lg" style="border-radius: 0.75rem;">
+                <div class="card-body p-4">
+                    <i class="fas fa-clock fa-3x text-primary mb-3"></i>
+                    <h3 class="h5 fw-bold">Smart Reminders</h3>
+                    <p class="text-muted">Set reminders to never miss an important task or deadline.</p>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 <!-- Note Creation Section -->
-<div class="container mt-4">
+<div class="container my-5">
     {% if 'username' in session %}
-        <a href="{{ url_for('create_note_page') }}" class="btn btn-primary mb-4">
-            <i class="fas fa-plus"></i> Create New Note
-        </a>
+        <div class="text-center mb-5">
+            <a href="{{ url_for('create_note_page') }}" class="btn btn-primary btn-lg px-5 py-3" style="border-radius: 50px;">
+                <i class="fas fa-plus me-2"></i>Create New Note
+            </a>
+        </div>
     {% else %}
-        <!-- Auto-save message -->
-        <div id="autosaveMessage" class="alert alert-success" style="display:none; position: fixed; top: 10px; right: 10px; z-index: 1050;">
-            Note auto-saved!
+        <!-- Auto-save Message -->
+        <div id="autosaveMessage" class="alert alert-success" style="display:none; position: fixed; top: 1rem; right: 1rem; z-index: 1050; min-width: 200px;">
+            <i class="fas fa-save me-2"></i>Note auto-saved!
         </div>
 
         <!-- Create Note Form -->
-        <div class="card my-4">
-            <h1>Guest User Notes Creation</h1>
-            <div class="card-body">
+        <div class="card my-5 shadow-lg border-0" style="border-radius: 0.75rem;">
+            <div class="card-header bg-primary text-white py-3">
+                <h3 class="h5 mb-0"><i class="fas fa-sticky-note me-2"></i>Create a Guest Note</h3>
+            </div>
+            <div class="card-body p-4">
                 <input type="hidden" id="noteId">
-                <div class="form-group mb-3">
-                    <label for="title"><i class="fas fa-heading"></i> Note Title</label>
-                    <input type="text" id="title" class="form-control" placeholder="Note Title">
+                <div class="mb-4">
+                    <label for="title" class="form-label"><i class="fas fa-heading me-2"></i>Note Title</label>
+                    <input type="text" id="title" class="form-control form-control-lg" placeholder="Enter note title">
                 </div>
-                <div class="form-group mb-3">
-                    <label for="content"><i class="fas fa-align-left"></i> Note Content</label>
-                    <textarea id="content" class="form-control" placeholder="Note Content" rows="4"></textarea>
+                <div class="mb-4">
+                    <label for="content" class="form-label"><i class="fas fa-align-left me-2"></i>Note Content</label>
+                    <textarea id="content" class="form-control" placeholder="Write your note here" rows="5"></textarea>
                 </div>
-                <div class="form-group mb-3">
-                    <label for="category"><i class="fas fa-tags"></i> Category</label>
-                    <select id="category" class="form-control">
+                <div class="mb-4">
+                    <label for="category" class="form-label"><i class="fas fa-tags me-2"></i>Category</label>
+                    <select id="category" class="form-select">
                         <option>Work</option>
                         <option>Personal</option>
                         <option>Study</option>
                         <option>Miscellaneous</option>
                     </select>
                 </div>
-                <div class="form-check mb-3">
+                <div class="form-check mb-4">
                     <input class="form-check-input" type="checkbox" id="isPinned">
                     <label class="form-check-label" for="isPinned">
-                        <i class="fas fa-thumbtack"></i> Pin this note
+                        <i class="fas fa-thumbtack me-2"></i>Pin this note
                     </label>
                 </div>
-                <button class="btn btn-primary" onclick="saveNote(false)">
-                    <i class="fas fa-save"></i> Save
-                </button>
+                <div class="text-end">
+                    <button class="btn btn-primary btn-lg px-5 py-3" onclick="saveNote(false)" style="border-radius: 50px;">
+                        <i class="fas fa-save me-2"></i>Save Note
+                    </button>
+                </div>
             </div>
         </div>
     {% endif %}
@@ -78,24 +132,24 @@
     <div class="row" id="notesList">
         {% if 'username' in session %}
             {% for note in notes %}
-            <div class="col-md-4 mb-3">
-                <div class="card h-100">
-                    <div class="card-header bg-light">
-                        <strong>{{ note[2] }}</strong>
-                        {% if note[5] %}
-                            <span class="badge bg-warning float-end"><i class="fas fa-thumbtack"></i> Pinned</span>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 border-0 shadow-lg" style="border-radius: 0.75rem;">
+                    <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center">
+                        <strong>{{ note.title }}</strong>
+                        {% if note.isPinned %}
+                            <span class="badge bg-warning text-dark"><i class="fas fa-thumbtack me-1"></i>Pinned</span>
                         {% endif %}
                     </div>
-                    <div class="card-body">
-                        <p>{{ note[3][:100] }}...</p>
-                        <small class="text-muted">{{ note[4] }} | Updated: {{ note[7] }}</small>
+                    <div class="card-body p-4">
+                        <p class="text-muted">{{ note.content[:100] | safe }}...</p>
+                        <small class="text-muted">Category: {{ note.category }}<br>Created: {{ note.createdAt.strftime('%Y-%m-%d %H:%M:%S') }}<br>Updated: {{ note.updatedAt.strftime('%Y-%m-%d %H:%M:%S') }}</small>
                     </div>
-                    <div class="card-footer text-end">
-                        <a href="{{ url_for('edit_note', note_id=note[0]) }}" class="btn btn-sm btn-info">
-                            <i class="fas fa-edit"></i> Edit
+                    <div class="card-footer bg-light text-end p-3 border-0">
+                        <a href="{{ url_for('edit_note', note_id=note.id) }}" class="btn btn-outline-primary btn-sm ">
+                            <i class="fas fa-edit me-1"></i>Edit
                         </a>
-                        <button onclick="deleteNote({{ note[0] }})" class="btn btn-sm btn-danger">
-                            <i class="fas fa-trash-alt"></i> Delete
+                        <button onclick="deleteNote({{ note.id }})" class="btn btn-danger btn-sm">
+                            <i class="fas fa-trash-alt me-1"></i>Delete
                         </button>
                     </div>
                 </div>
@@ -107,17 +161,33 @@
     </div>
 </div>
 
+<!-- Call to Action Section -->
+<div class="container-fluid bg-light py-5 text-center">
+    <h2 class="display-5 fw-bold mb-3"><i class="fas fa-rocket me-2"></i>Ready to Organize Your Life?</h2>
+    <p class="text-muted mb-4 fs-5" style="max-width: 700px; margin-left: auto; margin-right: auto;">Join thousands of users who trust Notes Manager to keep their thoughts in order.</p>
+    {% if not 'username' in session %}
+        <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg px-5 py-3" style="border-radius: 50px;">
+            <i class="fas fa-user-plus me-2"></i>Get Started Now
+        </a>
+    {% endif %}
+</div>
+
 <!-- Footer Section -->
-<footer class="footer mt-5" style="background-color: #004d4d; color: white; padding: 20px 0;">
+<footer class="footer bg-dark text-white py-5">
     <div class="container text-center">
-        <span style="font-size: 1rem; color:white;">
-            © 2025 Online Notes Manager. All rights reserved. | 
-            <a href="#" style="color: white;">Privacy Policy</a> | 
-            <a href="#" style="color: white;">Terms of Service</a>
-        </span>
+        <p class="mb-3 fs-5">© 2025 Notes Manager. All rights reserved.</p>
+        <div class="mb-3">
+            <a href="#" class="text-white mx-3 fs-6">Privacy Policy</a>
+            <a href="#" class="text-white mx-3 fs-6">Terms of Service</a>
+            <a href="#" class="text-white mx-3 fs-6">Contact Us</a>
+        </div>
+        <div>
+            <a href="#" class="text-white mx-3"><i class="fab fa-twitter fa-lg"></i></a>
+            <a href="#" class="text-white mx-3"><i class="fab fa-facebook fa-lg"></i></a>
+            <a href="#" class="text-white mx-3"><i class="fab fa-linkedin fa-lg"></i></a>
+        </div>
     </div>
 </footer>
-
 
 {% if 'username' not in session %}
 <script>
@@ -137,19 +207,19 @@ function loadGuestNotes() {
     notesList.innerHTML = '';
     notes.forEach(note => {
         const noteCard = `
-            <div class="col-md-4 mb-3">
-                <div class="card h-100">
-                    <div class="card-header bg-light">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 border-0 shadow-lg" style="border-radius: 0.75rem;">
+                    <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center">
                         <strong>${note.title}</strong>
-                        ${note.isPinned ? '<span class="badge bg-warning float-end">Pinned</span>' : ''}
+                        ${note.isPinned ? '<span class="badge bg-warning text-dark"><i class="fas fa-thumbtack me-1"></i>Pinned</span>' : ''}
                     </div>
-                    <div class="card-body">
-                        <p>${note.content.substring(0, 100)}...</p>
-                        <small class="text-muted">${note.category} | Updated: ${new Date(note.updatedAt).toLocaleString()}</small>
+                    <div class="card-body p-4">
+                        <p class="text-muted">${note.content.substring(0, 100)}...</p>
+                        <small class="text-muted">Category: ${note.category} | Updated: ${new Date(note.updatedAt).toLocaleString()}</small>
                     </div>
-                    <div class="card-footer text-end">
-                        <button onclick="editGuestNote('${note.id}')" class="btn btn-sm btn-info">Edit</button>
-                        <button onclick="deleteGuestNote('${note.id}')" class="btn btn-sm btn-danger">Delete</button>
+                    <div class="card-footer bg-light text-end p-3 border-0">
+                        <button onclick="editGuestNote('${note.id}')" class="btn btn-primary btn-sm me-2"><i class="fas fa-edit me-1"></i>Edit</button>
+                        <button onclick="deleteGuestNote('${note.id}')" class="btn btn-danger btn-sm"><i class="fas fa-trash-alt me-1"></i>Delete</button>
                     </div>
                 </div>
             </div>`;

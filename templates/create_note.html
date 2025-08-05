@@ -1,60 +1,61 @@
 {% extends 'base.html' %}
 {% block title %}Create Note{% endblock %}
 {% block content %}
-<div class="container mt-4">
-<h2 class="text-center mb-4"><i class="fas fa-pencil-alt"></i> Create New Note</h2>
-
-<!-- Auto-save message -->
-<div id="autosaveMessage" class="alert alert-success" style="display:none; position: fixed; top: 10px; right: 10px; z-index: 1050;">
-    <i class="fas fa-save"></i> Note auto-saved!
-</div>
-
-<!-- Note Form -->
-<div class="card shadow-lg mx-auto" style="max-width: 800px;">
-    <div class="card-header bg-info text-white">
-        <i class="fas fa-sticky-note"></i> New Note Details
+<div class="container my-5">
+    <!-- Header -->
+    <div class="text-center mb-5">
+        <h2 class="display-5 fw-bold"><i class="fas fa-pencil-alt me-2"></i>Create New Note</h2>
+        <p class="text-muted">Capture your thoughts and ideas effortlessly.</p>
     </div>
-    <div class="card-body bg-light">
-        <input type="hidden" id="noteId" value="{{ draft_note[0] if draft_note else '' }}">
 
-        <div class="form-group">
-            <label for="title"><i class="fas fa-heading"></i> Title</label>
-            <input type="text" id="title" class="form-control" placeholder="Enter note title here..." value="{{ draft_note[2] if draft_note else '' }}">
+    <!-- Auto-save message -->
+    <div id="autosaveMessage" class="alert alert-success" style="display:none; position: fixed; top: 1rem; right: 1rem; z-index: 1050; min-width: 200px;">
+        <i class="fas fa-save me-2"></i>Note auto-saved!
+    </div>
+
+    <!-- Note Form -->
+    <div class="card shadow-lg mx-auto border-0" style="max-width: 800px;">
+        <div class="card-header bg-primary text-white py-3">
+            <h3 class="h5 mb-0"><i class="fas fa-sticky-note me-2"></i>New Note Details</h3>
         </div>
-
-        <div class="form-group">
-            <label for="content"><i class="fas fa-align-left"></i> Content</label>
-            <textarea id="content" class="form-control" rows="8" placeholder="Write your note here...">{{ draft_note[3] if draft_note else '' }}</textarea>
-        </div>
-
-        <div class="form-group">
-            <label for="category"><i class="fas fa-tags"></i> Category</label>
-            <select id="category" class="form-control">
-                <option {% if draft_note and draft_note[4] == 'Work' %}selected{% endif %}>Work</option>
-                <option {% if draft_note and draft_note[4] == 'Personal' %}selected{% endif %}>Personal</option>
-                <option {% if draft_note and draft_note[4] == 'Study' %}selected{% endif %}>Study</option>
-                <option {% if draft_note and draft_note[4] == 'Miscellaneous' %}selected{% endif %}>Miscellaneous</option>
-            </select>
-        </div>
-
-        <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" id="isPinned" {% if draft_note and draft_note[5] %}checked{% endif %}>
-            <label class="form-check-label" for="isPinned">
-                <i class="fas fa-thumbtack"></i> Pin this note
-            </label>
-        </div>
-
-        <div class="d-flex justify-content-between">
-            <button class="btn btn-success" onclick="saveNote()">
-                <i class="fas fa-save"></i> Save Note
-            </button>
-            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left"></i> Back to Dashboard
-            </a>
+        <div class="card-body p-4">
+            <form>
+                <input type="hidden" id="noteId" value="{{ draft_note.id if draft_note else '' }}">
+                <div class="mb-4">
+                    <label for="title" class="form-label"><i class="fas fa-heading me-2"></i>Title</label>
+                    <input type="text" id="title" class="form-control form-control-lg" placeholder="Enter note title" value="{{ draft_note.title if draft_note else '' }}">
+                </div>
+                <div class="mb-4">
+                    <label for="content" class="form-label"><i class="fas fa-align-left me-2"></i>Content</label>
+                    <textarea id="content" class="form-control" rows="8" placeholder="Write your note here">{{ draft_note.content if draft_note else '' }}</textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="category" class="form-label"><i class="fas fa-tags me-2"></i>Category</label>
+                    <select id="category" class="form-select">
+                        <option {% if draft_note and draft_note.category == 'Work' %}selected{% endif %}>Work</option>
+                        <option {% if draft_note and draft_note.category == 'Personal' %}selected{% endif %}>Personal</option>
+                        <option {% if draft_note and draft_note.category == 'Study' %}selected{% endif %}>Study</option>
+                        <option {% if draft_note and draft_note.category == 'Miscellaneous' %}selected{% endif %}>Miscellaneous</option>
+                    </select>
+                </div>
+                <div class="form-check mb-4">
+                    <input class="form-check-input" type="checkbox" id="isPinned" {% if draft_note and draft_note.isPinned %}checked{% endif %}>
+                    <label class="form-check-label" for="isPinned">
+                        <i class="fas fa-thumbtack me-2"></i>Pin this note
+                    </label>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <button type="button" class="btn btn-primary btn-lg px-4" onclick="saveNote()">
+                        <i class="fas fa-save me-2"></i>Save Note
+                    </button>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-lg px-4">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </form>
         </div>
     </div>
 </div>
-
 
 <script>
 let autoSaveInterval = setInterval(() => {

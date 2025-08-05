@@ -1,31 +1,41 @@
 {% extends 'base.html' %}
 {% block title %}View Reminders{% endblock %}
 {% block content %}
-<div class="container mt-4">
-    <h2><i class="fas fa-bell"></i> Your Reminders</h2>
-    <a href="{{ url_for('add_reminder') }}" class="btn btn-primary mb-4">
-        <i class="fas fa-plus-circle"></i> Add New Reminder
-    </a>
+<div class="container my-5">
+    <!-- Header -->
+    <div class="text-center mb-5">
+        <h2 class="display-5 fw-bold"><i class="fas fa-bell me-2"></i>Your Reminders</h2>
+        <p class="text-muted">Manage all your reminders in one place.</p>
+    </div>
+
+    <!-- Add Reminder Button -->
+    <div class="mb-4 text-center">
+        <a href="{{ url_for('add_reminder') }}" class="btn btn-primary btn-lg px-4">
+            <i class="fas fa-plus-circle me-2"></i>Add New Reminder
+        </a>
+    </div>
+
+    <!-- Reminders Grid -->
     <div class="row">
-        {% for reminder in reminders %}
-        <div class="col-md-4 mb-3">
-            <div class="card h-100">
-                <div class="card-header bg-light">
-                    <strong><i class="fas fa-sticky-note"></i> {{ reminder[1] }}</strong>
+        {% for reminder, note in reminders %}
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-lg h-100 border-0">
+                <div class="card-header bg-primary text-white py-3">
+                    <strong><i class="fas fa-sticky-note me-2"></i>{{ note.title }}</strong>
                 </div>
-                <div class="card-body">
-                    <p><i class="fas fa-calendar-alt"></i> <strong>Date:</strong> {{ reminder[2] }}</p>
-                    <p><i class="fas fa-tasks"></i> <strong>Status:</strong> {{ reminder[3] }}</p>
-                    {% if reminder[4] %}
-                        <p><i class="fas fa-clock"></i> <strong>Snoozed Until:</strong> {{ reminder[4] }}</p>
+                <div class="card-body p-4">
+                    <p class="mb-2"><i class="fas fa-calendar-alt me-2"></i><strong>Date:</strong> {{ reminder.reminder_date.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                    <p class="mb-2"><i class="fas fa-tasks me-2"></i><strong>Status:</strong> {{ reminder.status }}</p>
+                    {% if reminder.snoozed_until %}
+                        <p class="mb-2"><i class="fas fa-clock me-2"></i><strong>Snoozed Until:</strong> {{ reminder.snoozed_until.strftime('%Y-%m-%d %H:%M:%S') }}</p>
                     {% endif %}
                 </div>
-                <div class="card-footer text-end">
-                    <a href="{{ url_for('edit_reminder', reminder_id=reminder[0]) }}" class="btn btn-sm btn-info">
-                        <i class="fas fa-edit"></i> Edit
+                <div class="card-footer bg-light text-end p-3">
+                    <a href="{{ url_for('edit_reminder', reminder_id=reminder.id) }}" class="btn btn-sm btn-outline-primary me-2">
+                        <i class="fas fa-edit me-1"></i>Edit
                     </a>
-                    <button onclick="deleteReminder({{ reminder[0] }})" class="btn btn-sm btn-danger">
-                        <i class="fas fa-trash-alt"></i> Delete
+                    <button onclick="deleteReminder({{ reminder.id }})" class="btn btn-sm btn-danger">
+                        <i class="fas fa-trash-alt me-1"></i>Delete
                     </button>
                 </div>
             </div>

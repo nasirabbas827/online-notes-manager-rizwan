@@ -1,21 +1,27 @@
 from flask import Flask, jsonify, Response, render_template, request, redirect, url_for, flash, session
-from flask_mysqldb import MySQL
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from flask_mail import Mail
 import os
 from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-# MySQL Configuration
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = ''
-app.config['MYSQL_DB'] = 'notes_db'
+# SQLite3 Configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///notes.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-mysql = MySQL(app)
+# Enable foreign keys for SQLite3
+def enable_foreign_keys():
+    if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
+        from sqlalchemy import event
+        @event.listens_for(db.engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
 # File Upload Configuration
 UPLOAD_FOLDER = 'static/uploads'
@@ -26,19 +32,52 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# Models
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(255), nullable=False, unique=True)
+    email = db.Column(db.String(255), nullable=False, unique=True)
+    password = db.Column(db.String(255), nullable=False)
+    first_name = db.Column(db.String(255))
+    last_name = db.Column(db.String(255))
+    profile_picture = db.Column(db.String(255))
+
+class Note(db.Model):
+    __tablename__ = 'notes'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    title = db.Column(db.String(255))
+    content = db.Column(db.Text)
+    category = db.Column(db.String(50))
+    isPinned = db.Column(db.Boolean, default=False)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow)
+    updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    isLocal = db.Column(db.Boolean, default=False)
+    isDraft = db.Column(db.Boolean, default=False)
+    user = db.relationship('User', backref='notes')
+
+class Reminder(db.Model):
+    __tablename__ = 'reminders'
+    id = db.Column(db.Integer, primary_key=True)
+    note_id = db.Column(db.Integer, db.ForeignKey('notes.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    reminder_date = db.Column(db.DateTime, nullable=False)
+    status = db.Column(db.Enum('pending', 'completed', 'snoozed', 'canceled'), default='pending')
+    snoozed_until = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    note = db.relationship('Note', backref='reminders')
+    user = db.relationship('User', backref='reminders')
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if 'user_id' in session:
         user_id = session['user_id']
         username = session['username']
-        cur = mysql.connection.cursor()
-        # Fetch non-draft notes for logged-in user
-        cur.execute('SELECT * FROM notes WHERE user_id = %s AND isDraft = FALSE ORDER BY isPinned DESC, updatedAt DESC', (user_id,))
-        notes = cur.fetchall()
-        cur.close()
+        notes = Note.query.filter_by(user_id=user_id, isDraft=False).order_by(Note.isPinned.desc(), Note.updatedAt.desc()).all()
         return render_template('index.html', username=username, notes=notes)
     else:
-        # Guest mode: render empty notes list (populated by localStorage)
         return render_template('index.html')
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -49,12 +88,9 @@ def register():
         password = request.form['password']
 
         hashed_password = generate_password_hash(password)
-
-        cur = mysql.connection.cursor()
-        cur.execute("INSERT INTO users (username, email, password) VALUES (%s, %s, %s)", 
-                    (username, email, hashed_password))
-        mysql.connection.commit()
-        cur.close()
+        user = User(username=username, email=email, password=hashed_password)
+        db.session.add(user)
+        db.session.commit()
 
         flash('Registration successful. You can now login.', 'success')
         return redirect(url_for('user_login'))
@@ -67,14 +103,10 @@ def user_login():
         username = request.form['username']
         password = request.form['password']
 
-        cur = mysql.connection.cursor()
-        cur.execute('SELECT id, username, password FROM users WHERE username = %s', (username,))
-        user = cur.fetchone()
-        cur.close()
-
-        if user and check_password_hash(user[2], password):
-            session['user_id'] = user[0]
-            session['username'] = user[1]
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            session['user_id'] = user.id
+            session['username'] = user.username
             return jsonify({'status': 'success', 'redirect': url_for('dashboard')})
         else:
             return jsonify({'status': 'error', 'message': 'Invalid username or password'}), 401
@@ -90,11 +122,8 @@ def sync_notes():
     data = request.get_json()
     guest_notes = data.get('notes', [])
 
-    cur = mysql.connection.cursor()
-    # Fetch existing notes to check for duplicates
-    cur.execute('SELECT title, content FROM notes WHERE user_id = %s AND isDraft = FALSE', (user_id,))
-    existing_notes = cur.fetchall()
-    existing_notes_set = {(note[0], note[1]) for note in existing_notes}  # Set of (title, content) tuples
+    existing_notes = Note.query.filter_by(user_id=user_id, isDraft=False).all()
+    existing_notes_set = {(note.title, note.content) for note in existing_notes}
 
     new_note_ids = []
     for note in guest_notes:
@@ -103,18 +132,14 @@ def sync_notes():
         category = note.get('category', 'Miscellaneous')
         isPinned = note.get('isPinned', False)
 
-        # Skip duplicates based on title and content
         if (title, content) not in existing_notes_set:
-            cur.execute("""
-                INSERT INTO notes (user_id, title, content, category, isPinned, isDraft)
-                VALUES (%s, %s, %s, %s, %s, FALSE)
-            """, (user_id, title, content, category, isPinned))
-            new_note_ids.append(cur.lastrowid)
+            new_note = Note(user_id=user_id, title=title, content=content, category=category, isPinned=isPinned, isDraft=False)
+            db.session.add(new_note)
+            db.session.flush()
+            new_note_ids.append(new_note.id)
             existing_notes_set.add((title, content))
 
-    mysql.connection.commit()
-    cur.close()
-
+    db.session.commit()
     return jsonify({'status': 'success', 'new_note_ids': new_note_ids})
 
 @app.route('/dashboard', methods=['GET', 'POST'])
@@ -125,28 +150,11 @@ def dashboard():
     user_id = session['user_id']
     username = session['username']
 
-    cur = mysql.connection.cursor()
-    # Fetch non-draft notes
-    cur.execute('SELECT * FROM notes WHERE user_id = %s AND isDraft = FALSE ORDER BY isPinned DESC, updatedAt DESC', (user_id,))
-    notes = cur.fetchall()
-
-    # Fetch draft note (if any)
-    cur.execute('SELECT * FROM notes WHERE user_id = %s AND isDraft = TRUE LIMIT 1', (user_id,))
-    draft_note = cur.fetchone()
-
-    # Fetch latest 5 upcoming reminders
-    cur.execute("""
-        SELECT r.id, n.title, r.reminder_date, r.status 
-        FROM reminders r 
-        JOIN notes n ON r.note_id = n.id 
-        WHERE r.user_id = %s AND r.reminder_date >= NOW() 
-        ORDER BY r.reminder_date ASC LIMIT 5
-    """, (user_id,))
-    reminders = cur.fetchall()
-    cur.close()
+    notes = Note.query.filter_by(user_id=user_id, isDraft=False).order_by(Note.isPinned.desc(), Note.updatedAt.desc()).all()
+    draft_note = Note.query.filter_by(user_id=user_id, isDraft=True).first()
+    reminders = db.session.query(Reminder, Note).join(Note).filter(Reminder.user_id == user_id, Reminder.reminder_date >= datetime.utcnow()).order_by(Reminder.reminder_date.asc()).limit(5).all()
 
     return render_template('dashboard.html', username=username, notes=notes, draft_note=draft_note, reminders=reminders)
-
 
 @app.route('/create_note', methods=['GET'])
 def create_note_page():
@@ -155,13 +163,7 @@ def create_note_page():
 
     user_id = session['user_id']
     username = session['username']
-
-    cur = mysql.connection.cursor()
-    # Fetch draft note (if any)
-    cur.execute('SELECT * FROM notes WHERE user_id = %s AND isDraft = TRUE LIMIT 1', (user_id,))
-    draft_note = cur.fetchone()
-    cur.close()
-
+    draft_note = Note.query.filter_by(user_id=user_id, isDraft=True).first()
     return render_template('create_note.html', username=username, draft_note=draft_note)
 
 @app.route('/notes/create', methods=['POST'])
@@ -177,29 +179,21 @@ def create_note():
     isPinned = data.get('isPinned')
     isDraft = data.get('isDraft', False)
 
-    cur = mysql.connection.cursor()
-    # Check if a draft note exists
-    cur.execute('SELECT id FROM notes WHERE user_id = %s AND isDraft = TRUE', (user_id,))
-    draft = cur.fetchone()
-
+    draft = Note.query.filter_by(user_id=user_id, isDraft=True).first()
     if draft and isDraft:
-        # Update existing draft
-        cur.execute("""
-            UPDATE notes SET title=%s, content=%s, category=%s, isPinned=%s, updatedAt=NOW()
-            WHERE id=%s AND user_id=%s
-        """, (title, content, category, isPinned, draft[0], user_id))
-        note_id = draft[0]
+        draft.title = title
+        draft.content = content
+        draft.category = category
+        draft.isPinned = isPinned
+        draft.updatedAt = datetime.utcnow()
+        note_id = draft.id
     else:
-        # Create new note
-        cur.execute("""
-            INSERT INTO notes (user_id, title, content, category, isPinned, isDraft)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (user_id, title, content, category, isPinned, isDraft))
-        note_id = cur.lastrowid  # Get last inserted id
+        new_note = Note(user_id=user_id, title=title, content=content, category=category, isPinned=isPinned, isDraft=isDraft)
+        db.session.add(new_note)
+        db.session.flush()
+        note_id = new_note.id
 
-    mysql.connection.commit()
-    cur.close()
-
+    db.session.commit()
     return jsonify({'status': 'success', 'note_id': note_id})
 
 @app.route('/notes/update/<int:note_id>', methods=['POST'])
@@ -208,20 +202,17 @@ def update_note(note_id):
         return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
 
     data = request.get_json()
-    title = data.get('title')
-    content = data.get('content')
-    category = data.get('category')
-    isPinned = data.get('isPinned')
-    isDraft = data.get('isDraft', False)
+    note = Note.query.filter_by(id=note_id, user_id=session['user_id']).first()
+    if not note:
+        return jsonify({'status': 'error', 'message': 'Note not found'}), 404
 
-    cur = mysql.connection.cursor()
-    cur.execute("""
-        UPDATE notes SET title=%s, content=%s, category=%s, isPinned=%s, isDraft=%s, updatedAt=NOW()
-        WHERE id=%s AND user_id=%s
-    """, (title, content, category, isPinned, isDraft, note_id, session['user_id']))
-    mysql.connection.commit()
-    cur.close()
-
+    note.title = data.get('title')
+    note.content = data.get('content')
+    note.category = data.get('category')
+    note.isPinned = data.get('isPinned')
+    note.isDraft = data.get('isDraft', False)
+    note.updatedAt = datetime.utcnow()
+    db.session.commit()
     return jsonify({'status': 'updated'})
 
 @app.route('/notes/delete/<int:note_id>', methods=['POST'])
@@ -229,11 +220,12 @@ def delete_note(note_id):
     if 'user_id' not in session:
         return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
 
-    cur = mysql.connection.cursor()
-    cur.execute("DELETE FROM notes WHERE id = %s AND user_id = %s", (note_id, session['user_id']))
-    mysql.connection.commit()
-    cur.close()
+    note = Note.query.filter_by(id=note_id, user_id=session['user_id']).first()
+    if not note:
+        return jsonify({'status': 'error', 'message': 'Note not found'}), 404
 
+    db.session.delete(note)
+    db.session.commit()
     return jsonify({'status': 'deleted'})
 
 @app.route('/notes/search', methods=['GET'])
@@ -243,19 +235,15 @@ def search_notes():
 
     user_id = session['user_id']
     query = request.args.get('query', '')
-
-    cur = mysql.connection.cursor()
-    # Search non-draft notes by title or content
-    cur.execute("""
-        SELECT * FROM notes 
-        WHERE user_id = %s AND isDraft = FALSE 
-        AND (title LIKE %s OR content LIKE %s) 
-        ORDER BY isPinned DESC, updatedAt DESC
-    """, (user_id, f'%{query}%', f'%{query}%'))
-    notes = cur.fetchall()
-    cur.close()
-
-    return jsonify({'status': 'success', 'notes': notes})
+    notes = Note.query.filter(Note.user_id == user_id, Note.isDraft == False, 
+                             (Note.title.ilike(f'%{query}%') | Note.content.ilike(f'%{query}%')))\
+                     .order_by(Note.isPinned.desc(), Note.updatedAt.desc()).all()
+    
+    notes_data = [{'id': note.id, 'title': note.title, 'content': note.content, 'category': note.category, 
+                   'isPinned': note.isPinned, 'createdAt': note.createdAt.isoformat(), 
+                   'updatedAt': note.updatedAt.isoformat()} 
+                  for note in notes]
+    return jsonify({'status': 'success', 'notes': notes_data})
 
 @app.route('/notes/export', methods=['GET'])
 def export_notes():
@@ -263,23 +251,16 @@ def export_notes():
         return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
 
     user_id = session['user_id']
-    cur = mysql.connection.cursor()
-    cur.execute('SELECT title, content, category, isPinned, updatedAt FROM notes WHERE user_id = %s AND isDraft = FALSE', (user_id,))
-    notes = cur.fetchall()
-    cur.close()
-
-    # Generate text content for export
+    notes = Note.query.filter_by(user_id=user_id, isDraft=False).all()
     export_content = ""
     for note in notes:
-        title, content, category, isPinned, updatedAt = note
-        export_content += f"Title: {title}\n"
-        export_content += f"Category: {category}\n"
-        export_content += f"Pinned: {isPinned}\n"
-        export_content += f"Updated At: {updatedAt}\n"
-        export_content += f"Content:\n{content}\n"
+        export_content += f"Title: {note.title}\n"
+        export_content += f"Category: {note.category}\n"
+        export_content += f"Pinned: {note.isPinned}\n"
+        export_content += f"Updated At: {note.updatedAt}\n"
+        export_content += f"Content:\n{note.content}\n"
         export_content += "-" * 50 + "\n\n"
 
-    # Return as a downloadable text file
     return Response(
         export_content,
         mimetype='text/plain',
@@ -291,11 +272,7 @@ def edit_note(note_id):
     if 'user_id' not in session:
         return redirect(url_for('user_login'))
 
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM notes WHERE id = %s AND user_id = %s", (note_id, session['user_id']))
-    note = cur.fetchone()
-    cur.close()
-
+    note = Note.query.filter_by(id=note_id, user_id=session['user_id']).first()
     if not note:
         flash('Note not found', 'danger')
         return redirect(url_for('dashboard'))
@@ -314,85 +291,59 @@ def update_profile():
         return redirect(url_for('user_login'))
 
     user_id = session['user_id']
+    user = User.query.get(user_id)
+    if not user:
+        flash('User not found', 'danger')
+        return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
-        first_name = request.form['first_name']
-        last_name = request.form['last_name']
-        email = request.form['email']
+        user.first_name = request.form['first_name']
+        user.last_name = request.form['last_name']
+        user.email = request.form['email']
         password = request.form['password']
 
-        hashed_password = generate_password_hash(password) if password else None
+        if password:
+            user.password = generate_password_hash(password)
 
-        profile_picture = None
         if 'profile_picture' in request.files:
             file = request.files['profile_picture']
             if file.filename != '' and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(file_path)
-                profile_picture = file_path.replace('\\', '/')
+                user.profile_picture = file_path.replace('\\', '/')
 
-        cur = mysql.connection.cursor()
-        if hashed_password:
-            cur.execute(
-                "UPDATE users SET first_name=%s, last_name=%s, email=%s, password=%s, profile_picture=%s WHERE id=%s",
-                (first_name, last_name, email, hashed_password, profile_picture, user_id)
-            )
-        else:
-            cur.execute(
-                "UPDATE users SET first_name=%s, last_name=%s, email=%s, profile_picture=%s WHERE id=%s",
-                (first_name, last_name, email, profile_picture, user_id)
-            )
-        mysql.connection.commit()
-        cur.close()
-
+        db.session.commit()
         flash('Profile updated successfully!', 'success')
         return redirect(url_for('view_profile'))
 
-    # GET: Fetch existing data
-    cur = mysql.connection.cursor()
-    cur.execute('SELECT first_name, last_name, email, profile_picture FROM users WHERE id = %s', (user_id,))
-    user = cur.fetchone()
-    cur.close()
-
-    if user:
-        user_data = {
-            'first_name': user[0],
-            'last_name': user[1],
-            'email': user[2],
-            'profile_picture': user[3].replace('\\', '/') if user[3] else None
-        }
-        return render_template('update_profile.html', user=user_data)
-    else:
-        flash('User not found', 'danger')
-        return redirect(url_for('dashboard'))
+    user_data = {
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'profile_picture': user.profile_picture.replace('\\', '/') if user.profile_picture else None
+    }
+    return render_template('update_profile.html', user=user_data)
 
 @app.route('/view_profile')
 def view_profile():
     if 'user_id' not in session:
         return redirect(url_for('user_login'))
-    
-    user_id = session['user_id']
-    
-    cur = mysql.connection.cursor()
-    cur.execute('SELECT username, password, first_name, last_name, email, profile_picture FROM users WHERE id = %s', (user_id,))
-    user = cur.fetchone()
-    cur.close()
-    
-    if user:
-        user_data = {
-            'username': user[0],
-            'password': user[1],
-            'first_name': user[2],
-            'last_name': user[3],
-            'email': user[4],
-            'profile_picture': user[5].replace('\\', '/') if user[5] else None
-        }
-        return render_template('view_profile.html', user=user_data)
-    else:
+
+    user = User.query.get(session['user_id'])
+    if not user:
         flash('User not found', 'danger')
         return redirect(url_for('dashboard'))
-    
+
+    user_data = {
+        'username': user.username,
+        'password': user.password,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'profile_picture': user.profile_picture.replace('\\', '/') if user.profile_picture else None
+    }
+    return render_template('view_profile.html', user=user_data)
 
 @app.route('/reminders/add', methods=['GET', 'POST'])
 def add_reminder():
@@ -400,28 +351,25 @@ def add_reminder():
         return redirect(url_for('user_login'))
 
     user_id = session['user_id']
-    cur = mysql.connection.cursor()
-
     if request.method == 'POST':
         note_id = request.form['note_id']
-        reminder_date = request.form['reminder_date']
+        reminder_date_str = request.form['reminder_date']
         status = request.form['status']
+        # Convert reminder_date string to datetime object
+        try:
+            reminder_date = datetime.strptime(reminder_date_str, '%Y-%m-%dT%H:%M')
+        except ValueError:
+            flash('Invalid reminder date format', 'danger')
+            return redirect(url_for('add_reminder'))
 
-        cur.execute("""
-            INSERT INTO reminders (note_id, user_id, reminder_date, status)
-            VALUES (%s, %s, %s, %s)
-        """, (note_id, user_id, reminder_date, status))
-        mysql.connection.commit()
-        cur.close()
+        reminder = Reminder(note_id=note_id, user_id=user_id, reminder_date=reminder_date, status=status)
+        db.session.add(reminder)
+        db.session.commit()
         flash('Reminder added successfully!', 'success')
         return redirect(url_for('view_reminders'))
 
-    # Fetch user's non-draft notes for dropdown
-    cur.execute('SELECT id, title FROM notes WHERE user_id = %s AND isDraft = FALSE', (user_id,))
-    notes = cur.fetchall()
-    cur.close()
+    notes = Note.query.filter_by(user_id=user_id, isDraft=False).all()
     return render_template('add_reminder.html', notes=notes)
-
 
 @app.route('/reminders/view', methods=['GET'])
 def view_reminders():
@@ -429,16 +377,7 @@ def view_reminders():
         return redirect(url_for('user_login'))
 
     user_id = session['user_id']
-    cur = mysql.connection.cursor()
-    cur.execute("""
-        SELECT r.id, n.title, r.reminder_date, r.status, r.snoozed_until 
-        FROM reminders r 
-        JOIN notes n ON r.note_id = n.id 
-        WHERE r.user_id = %s 
-        ORDER BY r.reminder_date DESC
-    """, (user_id,))
-    reminders = cur.fetchall()
-    cur.close()
+    reminders = db.session.query(Reminder, Note).join(Note).filter(Reminder.user_id == user_id).order_by(Reminder.reminder_date.desc()).all()
     return render_template('view_reminders.html', reminders=reminders)
 
 @app.route('/reminders/delete/<int:reminder_id>', methods=['POST'])
@@ -446,50 +385,48 @@ def delete_reminder(reminder_id):
     if 'user_id' not in session:
         return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
 
-    cur = mysql.connection.cursor()
-    cur.execute("DELETE FROM reminders WHERE id = %s AND user_id = %s", (reminder_id, session['user_id']))
-    mysql.connection.commit()
-    cur.close()
-    return jsonify({'status': 'deleted'})
+    reminder = Reminder.query.filter_by(id=reminder_id, user_id=session['user_id']).first()
+    if not reminder:
+        return jsonify({'status': 'error', 'message': 'Reminder not found'}), 404
 
+    db.session.delete(reminder)
+    db.session.commit()
+    return jsonify({'status': 'deleted'})
 
 @app.route('/reminders/edit/<int:reminder_id>', methods=['GET', 'POST'])
 def edit_reminder(reminder_id):
     if 'user_id' not in session:
         return redirect(url_for('user_login'))
 
-    user_id = session['user_id']
-    cur = mysql.connection.cursor()
-
-    if request.method == 'POST':
-        note_id = request.form['note_id']
-        reminder_date = request.form['reminder_date']
-        status = request.form['status']
-        snoozed_until = request.form['snoozed_until'] if request.form['snoozed_until'] else None
-
-        cur.execute("""
-            UPDATE reminders 
-            SET note_id=%s, reminder_date=%s, status=%s, snoozed_until=%s 
-            WHERE id=%s AND user_id=%s
-        """, (note_id, reminder_date, status, snoozed_until, reminder_id, user_id))
-        mysql.connection.commit()
-        cur.close()
-        flash('Reminder updated successfully!', 'success')
-        return redirect(url_for('view_reminders'))
-
-    # Fetch reminder and user's non-draft notes
-    cur.execute("SELECT id, note_id, reminder_date, status, snoozed_until FROM reminders WHERE id = %s AND user_id = %s", (reminder_id, user_id))
-    reminder = cur.fetchone()
-    cur.execute('SELECT id, title FROM notes WHERE user_id = %s AND isDraft = FALSE', (user_id,))
-    notes = cur.fetchall()
-    cur.close()
-
+    reminder = Reminder.query.filter_by(id=reminder_id, user_id=session['user_id']).first()
     if not reminder:
         flash('Reminder not found', 'danger')
         return redirect(url_for('view_reminders'))
 
+    if request.method == 'POST':
+        reminder.note_id = request.form['note_id']
+        reminder_date_str = request.form['reminder_date']
+        status = request.form['status']
+        snoozed_until_str = request.form['snoozed_until']
+        # Convert reminder_date string to datetime object
+        try:
+            reminder.reminder_date = datetime.strptime(reminder_date_str, '%Y-%m-%dT%H:%M')
+        except ValueError:
+            flash('Invalid reminder date format', 'danger')
+            return redirect(url_for('edit_reminder', reminder_id=reminder_id))
+        # Convert snoozed_until string to datetime object if provided
+        reminder.snoozed_until = datetime.strptime(snoozed_until_str, '%Y-%m-%dT%H:%M') if snoozed_until_str else None
+        reminder.status = status
+        reminder.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Reminder updated successfully!', 'success')
+        return redirect(url_for('view_reminders'))
+
+    notes = Note.query.filter_by(user_id=session['user_id'], isDraft=False).all()
     return render_template('edit_reminder.html', reminder=reminder, notes=notes)
 
-
 if __name__ == '__main__':
+    with app.app_context():
+        enable_foreign_keys()
+        db.create_all()  # Create tables if they don't exist
     app.run(debug=True)
