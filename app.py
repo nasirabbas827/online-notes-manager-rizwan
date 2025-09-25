@@ -1,9 +1,11 @@
 from flask import Flask, jsonify, Response, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
+import uuid
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
@@ -12,6 +14,11 @@ app.secret_key = 'your_secret_key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///notes.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# Flask-Login Configuration
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'user_login'
 
 # Enable foreign keys for SQLite3
 def enable_foreign_keys():
@@ -33,7 +40,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # Models
-class User(db.Model):
+class User(db.Model, UserMixin):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(255), nullable=False, unique=True)
@@ -42,6 +49,9 @@ class User(db.Model):
     first_name = db.Column(db.String(255))
     last_name = db.Column(db.String(255))
     profile_picture = db.Column(db.String(255))
+
+    def get_id(self):
+        return str(self.id)
 
 class Note(db.Model):
     __tablename__ = 'notes'
@@ -70,13 +80,15 @@ class Reminder(db.Model):
     note = db.relationship('Note', backref='reminders')
     user = db.relationship('User', backref='reminders')
 
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    if 'user_id' in session:
-        user_id = session['user_id']
-        username = session['username']
-        notes = Note.query.filter_by(user_id=user_id, isDraft=False).order_by(Note.isPinned.desc(), Note.updatedAt.desc()).all()
-        return render_template('index.html', username=username, notes=notes)
+    if current_user.is_authenticated:
+        notes = Note.query.filter_by(user_id=current_user.id, isDraft=False).order_by(Note.isPinned.desc(), Note.updatedAt.desc()).all()
+        return render_template('index.html', username=current_user.username, notes=notes)
     else:
         return render_template('index.html')
 
@@ -86,6 +98,17 @@ def register():
         username = request.form['username']
         email = request.form['email']
         password = request.form['password']
+
+        # Check for existing username or email
+        existing_user = User.query.filter_by(username=username).first()
+        existing_email = User.query.filter_by(email=email).first()
+
+        if existing_user:
+            flash('Username already exists. Please choose a different username.', 'danger')
+            return render_template('register.html')
+        if existing_email:
+            flash('Email already registered. Please use a different email or log in.', 'danger')
+            return render_template('register.html')
 
         hashed_password = generate_password_hash(password)
         user = User(username=username, email=email, password=hashed_password)
@@ -105,8 +128,7 @@ def user_login():
 
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
-            session['user_id'] = user.id
-            session['username'] = user.username
+            login_user(user)
             return jsonify({'status': 'success', 'redirect': url_for('dashboard')})
         else:
             return jsonify({'status': 'error', 'message': 'Invalid username or password'}), 401
@@ -114,11 +136,9 @@ def user_login():
     return render_template('login.html')
 
 @app.route('/notes/sync', methods=['POST'])
+@login_required
 def sync_notes():
-    if 'user_id' not in session:
-        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
-
-    user_id = session['user_id']
+    user_id = current_user.id
     data = request.get_json()
     guest_notes = data.get('notes', [])
 
@@ -143,12 +163,10 @@ def sync_notes():
     return jsonify({'status': 'success', 'new_note_ids': new_note_ids})
 
 @app.route('/dashboard', methods=['GET', 'POST'])
+@login_required
 def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('user_login'))
-
-    user_id = session['user_id']
-    username = session['username']
+    user_id = current_user.id
+    username = current_user.username
 
     notes = Note.query.filter_by(user_id=user_id, isDraft=False).order_by(Note.isPinned.desc(), Note.updatedAt.desc()).all()
     draft_note = Note.query.filter_by(user_id=user_id, isDraft=True).first()
@@ -157,21 +175,17 @@ def dashboard():
     return render_template('dashboard.html', username=username, notes=notes, draft_note=draft_note, reminders=reminders)
 
 @app.route('/create_note', methods=['GET'])
+@login_required
 def create_note_page():
-    if 'user_id' not in session:
-        return redirect(url_for('user_login'))
-
-    user_id = session['user_id']
-    username = session['username']
+    user_id = current_user.id
+    username = current_user.username
     draft_note = Note.query.filter_by(user_id=user_id, isDraft=True).first()
     return render_template('create_note.html', username=username, draft_note=draft_note)
 
 @app.route('/notes/create', methods=['POST'])
+@login_required
 def create_note():
-    if 'user_id' not in session:
-        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
-
-    user_id = session['user_id']
+    user_id = current_user.id
     data = request.get_json()
     title = data.get('title')
     content = data.get('content')
@@ -197,12 +211,10 @@ def create_note():
     return jsonify({'status': 'success', 'note_id': note_id})
 
 @app.route('/notes/update/<int:note_id>', methods=['POST'])
+@login_required
 def update_note(note_id):
-    if 'user_id' not in session:
-        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
-
     data = request.get_json()
-    note = Note.query.filter_by(id=note_id, user_id=session['user_id']).first()
+    note = Note.query.filter_by(id=note_id, user_id=current_user.id).first()
     if not note:
         return jsonify({'status': 'error', 'message': 'Note not found'}), 404
 
@@ -216,11 +228,9 @@ def update_note(note_id):
     return jsonify({'status': 'updated'})
 
 @app.route('/notes/delete/<int:note_id>', methods=['POST'])
+@login_required
 def delete_note(note_id):
-    if 'user_id' not in session:
-        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
-
-    note = Note.query.filter_by(id=note_id, user_id=session['user_id']).first()
+    note = Note.query.filter_by(id=note_id, user_id=current_user.id).first()
     if not note:
         return jsonify({'status': 'error', 'message': 'Note not found'}), 404
 
@@ -229,11 +239,9 @@ def delete_note(note_id):
     return jsonify({'status': 'deleted'})
 
 @app.route('/notes/search', methods=['GET'])
+@login_required
 def search_notes():
-    if 'user_id' not in session:
-        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
-
-    user_id = session['user_id']
+    user_id = current_user.id
     query = request.args.get('query', '')
     notes = Note.query.filter(Note.user_id == user_id, Note.isDraft == False, 
                              (Note.title.ilike(f'%{query}%') | Note.content.ilike(f'%{query}%')))\
@@ -246,11 +254,9 @@ def search_notes():
     return jsonify({'status': 'success', 'notes': notes_data})
 
 @app.route('/notes/export', methods=['GET'])
+@login_required
 def export_notes():
-    if 'user_id' not in session:
-        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
-
-    user_id = session['user_id']
+    user_id = current_user.id
     notes = Note.query.filter_by(user_id=user_id, isDraft=False).all()
     export_content = ""
     for note in notes:
@@ -268,11 +274,9 @@ def export_notes():
     )
 
 @app.route('/notes/edit/<int:note_id>', methods=['GET'])
+@login_required
 def edit_note(note_id):
-    if 'user_id' not in session:
-        return redirect(url_for('user_login'))
-
-    note = Note.query.filter_by(id=note_id, user_id=session['user_id']).first()
+    note = Note.query.filter_by(id=note_id, user_id=current_user.id).first()
     if not note:
         flash('Note not found', 'danger')
         return redirect(url_for('dashboard'))
@@ -280,18 +284,16 @@ def edit_note(note_id):
     return render_template('edit_note.html', note=note)
 
 @app.route('/user/logout')
+@login_required
 def user_logout():
-    session.clear()
+    logout_user()
     flash('You have been logged out.', 'info')
     return redirect(url_for('index'))
 
 @app.route('/update_profile', methods=['GET', 'POST'])
+@login_required
 def update_profile():
-    if 'user_id' not in session:
-        return redirect(url_for('user_login'))
-
-    user_id = session['user_id']
-    user = User.query.get(user_id)
+    user = User.query.get(current_user.id)
     if not user:
         flash('User not found', 'danger')
         return redirect(url_for('dashboard'))
@@ -326,11 +328,9 @@ def update_profile():
     return render_template('update_profile.html', user=user_data)
 
 @app.route('/view_profile')
+@login_required
 def view_profile():
-    if 'user_id' not in session:
-        return redirect(url_for('user_login'))
-
-    user = User.query.get(session['user_id'])
+    user = User.query.get(current_user.id)
     if not user:
         flash('User not found', 'danger')
         return redirect(url_for('dashboard'))
@@ -346,11 +346,9 @@ def view_profile():
     return render_template('view_profile.html', user=user_data)
 
 @app.route('/reminders/add', methods=['GET', 'POST'])
+@login_required
 def add_reminder():
-    if 'user_id' not in session:
-        return redirect(url_for('user_login'))
-
-    user_id = session['user_id']
+    user_id = current_user.id
     if request.method == 'POST':
         note_id = request.form['note_id']
         reminder_date_str = request.form['reminder_date']
@@ -372,20 +370,16 @@ def add_reminder():
     return render_template('add_reminder.html', notes=notes)
 
 @app.route('/reminders/view', methods=['GET'])
+@login_required
 def view_reminders():
-    if 'user_id' not in session:
-        return redirect(url_for('user_login'))
-
-    user_id = session['user_id']
+    user_id = current_user.id
     reminders = db.session.query(Reminder, Note).join(Note).filter(Reminder.user_id == user_id).order_by(Reminder.reminder_date.desc()).all()
     return render_template('view_reminders.html', reminders=reminders)
 
 @app.route('/reminders/delete/<int:reminder_id>', methods=['POST'])
+@login_required
 def delete_reminder(reminder_id):
-    if 'user_id' not in session:
-        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
-
-    reminder = Reminder.query.filter_by(id=reminder_id, user_id=session['user_id']).first()
+    reminder = Reminder.query.filter_by(id=reminder_id, user_id=current_user.id).first()
     if not reminder:
         return jsonify({'status': 'error', 'message': 'Reminder not found'}), 404
 
@@ -394,11 +388,9 @@ def delete_reminder(reminder_id):
     return jsonify({'status': 'deleted'})
 
 @app.route('/reminders/edit/<int:reminder_id>', methods=['GET', 'POST'])
+@login_required
 def edit_reminder(reminder_id):
-    if 'user_id' not in session:
-        return redirect(url_for('user_login'))
-
-    reminder = Reminder.query.filter_by(id=reminder_id, user_id=session['user_id']).first()
+    reminder = Reminder.query.filter_by(id=reminder_id, user_id=current_user.id).first()
     if not reminder:
         flash('Reminder not found', 'danger')
         return redirect(url_for('view_reminders'))
@@ -422,7 +414,7 @@ def edit_reminder(reminder_id):
         flash('Reminder updated successfully!', 'success')
         return redirect(url_for('view_reminders'))
 
-    notes = Note.query.filter_by(user_id=session['user_id'], isDraft=False).all()
+    notes = Note.query.filter_by(user_id=current_user.id, isDraft=False).all()
     return render_template('edit_reminder.html', reminder=reminder, notes=notes)
 
 if __name__ == '__main__':

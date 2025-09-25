@@ -186,26 +186,25 @@
 
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    {% if not session.admin_logged_in and not session.user_id %}
+                    {% if not current_user.is_authenticated %}
                     <li class="nav-item">
-                        <a class="nav-link" href="/user/login"><i class="fas fa-sign-in-alt"></i> Login</a>
+                        <a class="nav-link" href="{{ url_for('user_login') }}"><i class="fas fa-sign-in-alt"></i> Login</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/register"><i class="fas fa-user-plus"></i> Register</a>
+                        <a class="nav-link" href="{{ url_for('register') }}"><i class="fas fa-user-plus"></i> Register</a>
                     </li>
-                    {% endif %}
-                    {% if session.user_id %}
+                    {% else %}
                     <li class="nav-item">
-                        <a class="nav-link" href="/dashboard"><i class="fas fa-th-large"></i> Dashboard</a>
+                        <a class="nav-link" href="{{ url_for('dashboard') }}"><i class="fas fa-th-large"></i> Dashboard</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/view_profile"><i class="fas fa-user"></i> Profile</a>
+                        <a class="nav-link" href="{{ url_for('view_profile') }}"><i class="fas fa-user"></i> Profile</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('view_reminders') }}"><i class="fas fa-clock"></i> Reminders</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/user/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                        <a class="nav-link" href="{{ url_for('user_logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
                     </li>
                     {% endif %}
                 </ul>
@@ -213,20 +212,7 @@
         </div>
     </nav>
 
-<!-- {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-        <div class="container">
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        </div>
-    {% endif %}
-{% endwith %} -->
-
-    {% block content %}{% endblock %}
+     {% block content %}{% endblock %}
 
     <!-- Bootstrap JS and dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r" crossorigin="anonymous"></script>
