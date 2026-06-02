@@ -8,7 +8,7 @@ from datetime import datetime
 import uuid
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'
+app.secret_key = "YOUR_OWN_API_KEY"
 
 # SQLite3 Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///notes.db'
