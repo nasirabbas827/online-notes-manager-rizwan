@@ -1,84 +1,113 @@
-# Online-Notes-Manager-Rizwan
+# online-notes-manager-rizwan  
 
-A lightweight web application that lets users create, edit, and organize personal notes and reminders. Built with Flask (Python) and plain HTML templates, it provides a clean, responsive UI for managing daily tasks.
+A lightweight web application that lets users create, edit, and organize personal notes and reminders. Built with Flask and plain HTML templates, it stores data locally in SQLite for quick prototyping and easy deployment.
 
----
+---  
 
-## Overview
-The **Online-Notes-Manager-Rizwan** project offers a simple yet functional notes‑taking platform. Users can register, log in, create notes, set reminders, and view/edit their profile—all backed by a SQLite database.
+## Overview  
 
----
+The **Online Notes Manager** provides a simple, secure interface for managing notes and reminders. Users can register, log in, and maintain a personal dashboard where they can:
 
-## Features
-- **User Authentication** – Register, login, and logout securely.  
-- **Notes Management** – Create, edit, delete, and view notes.  
-- **Reminders** – Add, edit, and list time‑based reminders.  
-- **Profile Management** – Update and view user profile information.  
-- **Responsive UI** – Clean HTML templates using a shared `base.html`.  
-- **SQLite Persistence** – All data stored in `instance/notes.db`.
+* Create, edit, and delete notes.  
+* Set and view time‑based reminders.  
+* Update their profile information.  
 
----
+All data is persisted in an SQLite database (`instance/notes.db`) and rendered through clean, responsive HTML templates.
 
-## Tech Stack
+---  
+
+## Features  
+
+| ✅ | Feature |
+|---|----------|
+| ✔️ | User authentication (register, login, logout) |
+| ✔️ | CRUD operations for notes |
+| ✔️ | CRUD operations for reminders with optional due dates |
+| ✔️ | Personal profile view & update |
+| ✔️ | Dashboard summarising recent notes & upcoming reminders |
+| ✔️ | Server‑side validation and flash messages for user feedback |
+| ✔️ | SQLite persistence (no external DB required) |
+| ✔️ | Fully templated UI using Jinja2 and Bootstrap (optional) |
+
+---  
+
+## Tech Stack  
+
 | Layer | Technology |
 |-------|------------|
-| Backend | Python 3, Flask |
-| Database | SQLite (`instance/notes.db`) |
-| Front‑end | HTML5, CSS (embedded in templates) |
-| Deployment | Any WSGI‑compatible server (e.g., Gunicorn) |
+| Backend | **Python 3**, Flask |
+| Database | SQLite (via Flask‑SQLAlchemy) |
+| Templating | Jinja2 (HTML) |
+| Deployment | Any platform that can run a Flask app (e.g., Heroku, Render, local Docker) |
+| Other | `Werkzeug` for password hashing, `Flask‑Login` for session management |
 
----
+---  
 
-## Installation
+## Installation  
 
-1. **Clone the repository**
+> **Prerequisites**  
+> * Python 3.8+  
+> * Git  
+
+1. **Clone the repository**  
+
    ```bash
-   git clone https://github.com/yourusername/Online-Notes-Manager-Rizwan.git
-   cd Online-Notes-Manager-Rizwan
+   git clone https://github.com/your-username/online-notes-manager-rizwan.git
+   cd online-notes-manager-rizwan
    ```
 
-2. **Create a virtual environment** (optional but recommended)
+2. **Create a virtual environment**  
+
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate   # on Windows: venv\Scripts\activate
+   python -m venv venv
+   source venv/bin/activate   # On Windows: venv\Scripts\activate
    ```
 
-3. **Install dependencies**
+3. **Install dependencies**  
+
    ```bash
    pip install -r requirements.txt
    ```
-   *If `requirements.txt` is missing, install Flask manually:*
+
+   *If a `requirements.txt` file is not present, install the core packages manually:*
+
    ```bash
-   pip install Flask
+   pip install Flask Flask-Login Flask-SQLAlchemy
    ```
 
-4. **Set up environment variables** (replace placeholders as needed)
-   ```bash
-   export FLASK_APP=app.py
-   export FLASK_ENV=development   # optional, for debug mode
-   export SECRET_KEY=YOUR_OWN_API_KEY
+4. **Configure environment variables**  
+
+   Create a `.env` file (or export variables in your shell) with at least the following:
+
+   ```env
+   FLASK_APP=app.py
+   FLASK_ENV=development   # optional, remove for production
+   SECRET_KEY=YOUR_OWN_API_KEY
    ```
 
-5. **Initialize the database** (only required on first run)
+5. **Initialize the database**  
+
    ```bash
-   flask init-db
+   flask db upgrade   # if using Flask-Migrate
+   # or, for the simple setup provided:
+   python -c "from app import db; db.create_all()"
    ```
-   *The command creates `instance/notes.db` if it does not exist.*
 
----
+6. **Run the application**  
 
-## Usage
+   ```bash
+   flask run
+   ```
 
-```bash
-flask run
-```
+   The app will be accessible at `http://127.0.0.1:5000`.
 
-- The app will be available at `http://127.0.0.1:5000/`.
-- Navigate to `/register` to create a new account, then log in.
-- Use the dashboard to manage notes and reminders.
+---  
 
----
+## Usage  
 
-## License
-
-This project is licensed under the **MIT License** – see the `LICENSE` file for details.
+1. **Open the web UI** – navigate to `http://127.0.0.1:5000` in a browser.  
+2. **Register a new account** – click *Register* and fill out the form.  
+3. **Log in** – use the credentials you just created.  
+4. **Dashboard** – view a summary of your notes and upcoming reminders.  
+5. **Create a note** – go to *Create Note*, fill in the title and content, then submit.  
+6. **Create a reminder** – from the dashboard or the *Add
